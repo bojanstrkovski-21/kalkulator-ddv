@@ -1,0 +1,253 @@
+---
+import '../styles/global.css';
+---
+
+<!DOCTYPE html>
+<html lang="mk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ДДВ калкулатор за Северна Македонија - Пресметајте данок на додадена вредност" />
+    <title>ДДВ Калкулатор - Северна Македонија</title>
+  </head>
+  <body>
+    <main>
+      <div class="container">
+        <header>
+          <h1>🧮 ДДВ Калкулатор</h1>
+          <p class="subtitle">Пресметајте данок на додадена вредност за Северна Македонија</p>
+        </header>
+
+        <div class="calculator-card">
+          <div class="input-group">
+            <label for="amount">Износ (ден.)</label>
+            <input 
+              type="text" 
+              id="amount" 
+              placeholder="0,00" 
+              inputmode="decimal"
+            />
+          </div>
+
+          <div class="input-group">
+            <label>ДДВ стапка</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="vatRate" value="18" checked />
+                <span class="radio-custom">18%</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="vatRate" value="5" />
+                <span class="radio-custom">5%</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Пресметка</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="calcMode" value="add" checked />
+                <span class="radio-custom">+ Додади ДДВ</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="calcMode" value="extract" />
+                <span class="radio-custom">− Извлечи ДДВ</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="results">
+            <div class="result-row">
+              <span class="result-label">Без ДДВ</span>
+              <span class="result-value" id="withoutVat">0.00 ден.</span>
+            </div>
+            <div class="result-row highlight">
+              <span class="result-label">ДДВ (<span id="vatRateDisplay">18</span>%)</span>
+              <span class="result-value" id="vatAmount">0.00 ден.</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Со ДДВ</span>
+              <span class="result-value" id="withVat">0.00 ден.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h2>Како работи ДДВ во Северна Македонија</h2>
+          <p>
+            Данокот на додадена вредност (ДДВ) во Северна Македонија има две стапки:
+            стандардна стапка од <strong>18%</strong> за повеќето стоки и услуги, и 
+            повластена стапка од <strong>5%</strong> за основни прехранбени производи, 
+            лекови, книги и земјоделски производи.
+          </p>
+
+          <div class="vat-rates">
+            <div class="rate-card">
+              <div class="rate-number">18%</div>
+              <h3>Стандардна стапка</h3>
+              <p>Повеќето стоки и услуги, градежништво, ИТ, консалтинг, транспорт</p>
+            </div>
+            <div class="rate-card">
+              <div class="rate-number">5%</div>
+              <h3>Повластена стапка</h3>
+              <p>Основни прехранбени производи, лекови, медицински помагала, книги, земјоделски производи</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // Calculator logic
+      const amountInput = document.getElementById('amount') as HTMLInputElement;
+      const vatRateInputs = document.querySelectorAll('input[name="vatRate"]');
+      const calcModeInputs = document.querySelectorAll('input[name="calcMode"]');
+      const withoutVatEl = document.getElementById('withoutVat');
+      const vatAmountEl = document.getElementById('vatAmount');
+      const withVatEl = document.getElementById('withVat');
+      const vatRateDisplay = document.getElementById('vatRateDisplay');
+
+      // Parse European formatted number (1.234,56) or regular number to JavaScript number
+      function parseEuropeanNumber(value: string): number {
+        if (!value) return 0;
+        // Remove all spaces and trim
+        value = value.trim().replace(/\s/g, '');
+        
+        // Check if it has European formatting (dots and/or comma)
+        const hasDot = value.includes('.');
+        const hasComma = value.includes(',');
+        
+        if (hasDot && hasComma) {
+          // European format: 1.234,56
+          const normalized = value.replace(/\./g, '').replace(',', '.');
+          return parseFloat(normalized) || 0;
+        } else if (hasComma && !hasDot) {
+          // Only comma: 1234,56
+          const normalized = value.replace(',', '.');
+          return parseFloat(normalized) || 0;
+        } else if (hasDot && !hasComma) {
+          // Could be either format
+          const lastDotPos = value.lastIndexOf('.');
+          const afterDot = value.substring(lastDotPos + 1);
+          
+          // If only 1-2 digits after dot, it's likely decimal
+          if (afterDot.length <= 2 && value.split('.').length === 2) {
+            return parseFloat(value) || 0;
+          } else {
+            // It's a thousand separator
+            const normalized = value.replace(/\./g, '');
+            return parseFloat(normalized) || 0;
+          }
+        } else {
+          // Plain number: 1234
+          return parseFloat(value) || 0;
+        }
+      }
+
+      // Format number with European style
+      function formatNumber(value: number): string {
+        return value.toLocaleString('de-DE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+
+      function formatCurrency(value: number): string {
+        return formatNumber(value) + ' ден.';
+      }
+
+      // Format input field when user leaves it
+      let isFormatting = false;
+      function formatInputField(updateCursor = false) {
+        if (isFormatting) return;
+        isFormatting = true;
+
+        const cursorPosition = amountInput.selectionStart || 0;
+        const oldValue = amountInput.value.trim();
+        const oldLength = oldValue.length;
+
+        // Parse the current value
+        const numericValue = parseEuropeanNumber(oldValue);
+        
+        // Format it
+        let formatted: string;
+        if (oldValue === '' || numericValue === 0) {
+          formatted = '0,00';
+        } else {
+          formatted = formatNumber(numericValue);
+        }
+        
+        amountInput.value = formatted;
+
+        // Restore cursor position (approximately)
+        if (updateCursor) {
+          const newLength = formatted.length;
+          const lengthDiff = newLength - oldLength;
+          const newCursorPosition = Math.min(Math.max(0, cursorPosition + lengthDiff), formatted.length);
+          amountInput.setSelectionRange(newCursorPosition, newCursorPosition);
+        }
+
+        isFormatting = false;
+      }
+
+      function calculate() {
+        const amount = parseEuropeanNumber(amountInput.value);
+        const vatRate = parseInt((document.querySelector('input[name="vatRate"]:checked') as HTMLInputElement)?.value || '18');
+        const calcMode = (document.querySelector('input[name="calcMode"]:checked') as HTMLInputElement)?.value || 'add';
+
+        // Update VAT rate display
+        if (vatRateDisplay) vatRateDisplay.textContent = vatRate.toString();
+
+        let withoutVat: number;
+        let vatAmount: number;
+        let withVat: number;
+
+        if (calcMode === 'add') {
+          // Adding VAT to base amount
+          withoutVat = amount;
+          vatAmount = amount * (vatRate / 100);
+          withVat = amount + vatAmount;
+        } else {
+          // Extracting VAT from total amount
+          withVat = amount;
+          withoutVat = amount / (1 + vatRate / 100);
+          vatAmount = amount - withoutVat;
+        }
+
+        // Update display
+        if (withoutVatEl) withoutVatEl.textContent = formatCurrency(withoutVat);
+        if (vatAmountEl) vatAmountEl.textContent = formatCurrency(vatAmount);
+        if (withVatEl) withVatEl.textContent = formatCurrency(withVat);
+      }
+
+      // Handle input formatting and calculation
+      function handleInput() {
+        calculate(); // Only calculate, don't format while typing
+      }
+
+      function handleBlur() {
+        formatInputField(false); // Format when user clicks away
+        calculate();
+      }
+
+      function handleKeyDown(e: KeyboardEvent) {
+        if (e.key === 'Enter') {
+          formatInputField(false);
+          calculate();
+        }
+      }
+
+      // Event listeners
+      amountInput?.addEventListener('input', handleInput);
+      amountInput?.addEventListener('blur', handleBlur); // Format on blur
+      amountInput?.addEventListener('keydown', handleKeyDown); // Format on Enter
+      vatRateInputs.forEach(input => input.addEventListener('change', calculate));
+      calcModeInputs.forEach(input => input.addEventListener('change', calculate));
+
+      // Initial setup
+      amountInput.value = '0,00';
+      calculate();
+    </script>
+  </body>
+</html>
