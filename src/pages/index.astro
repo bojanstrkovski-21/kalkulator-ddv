@@ -222,31 +222,135 @@ import '../styles/global.css';
       }
 
       // Handle input formatting and calculation
-      function handleInput() {
-        calculate(); // Only calculate, don't format while typing
+      let lastValue = '0,00';
+      
+      function handleInput(e: Event) {
+        const input = e.target as HTMLInputElement;
+        let cursorPosition = input.selectionStart || 0;
+        const oldValue = lastValue;
+        let value = input.value;
+        
+        // Remove all non-digit and non-comma characters
+        let cleanValue = value.replace(/[^\d,]/g, '');
+        
+        // Count how many characters were before cursor (for repositioning)
+        const beforeCursor = value.substring(0, cursorPosition);
+        const digitBeforeCursor = beforeCursor.replace(/[^\d,]/g, '').length;
+        
+        // Split by comma to handle integer and decimal parts
+        let parts = cleanValue.split(',');
+        let integerPart = parts[0] || '0';
+        let decimalPart = parts[1] || '';
+        
+        // Limit decimal to 2 digits
+        if (decimalPart.length > 2) {
+          decimalPart = decimalPart.substring(0, 2);
+        }
+        
+        // Format integer part with dots for thousands
+        let formattedInteger = '';
+        if (integerPart === '') {
+          formattedInteger = '0';
+        } else {
+          // Remove leading zeros except if it's just "0"
+          integerPart = integerPart.replace(/^0+/, '') || '0';
+          
+          // Add dots every 3 digits from right to left
+          const digits = integerPart.split('').reverse();
+          for (let i = 0; i < digits.length; i++) {
+            if (i > 0 && i % 3 === 0) {
+              formattedInteger = '.' + formattedInteger;
+            }
+            formattedInteger = digits[i] + formattedInteger;
+          }
+        }
+        
+        // Construct final value with decimals
+        let formatted = formattedInteger;
+        if (parts.length > 1 || cleanValue.includes(',')) {
+          // User is typing decimals
+          formatted += ',' + decimalPart;
+        } else {
+          // Always show ,00 when no comma typed yet
+          formatted += ',00';
+        }
+        
+        // Update input value
+        input.value = formatted;
+        lastValue = formatted;
+        
+        // Calculate new cursor position
+        let newCursorPos = 0;
+        let digitCount = 0;
+        
+        // If we're typing in the integer part (before comma), position accordingly
+        if (parts.length === 1 && !cleanValue.includes(',')) {
+          // User hasn't typed comma yet, keep cursor before the ,00
+          for (let i = 0; i < formatted.length; i++) {
+            if (formatted[i] === ',') break;
+            if (/\d/.test(formatted[i])) {
+              digitCount++;
+            }
+            if (digitCount >= digitBeforeCursor) {
+              newCursorPos = i + 1;
+              break;
+            }
+            newCursorPos = i + 1;
+          }
+        } else {
+          // User is typing decimals, position normally
+          for (let i = 0; i < formatted.length; i++) {
+            if (/[\d,]/.test(formatted[i])) {
+              digitCount++;
+            }
+            if (digitCount >= digitBeforeCursor) {
+              newCursorPos = i + 1;
+              break;
+            }
+            newCursorPos = i + 1;
+          }
+        }
+        
+        // Set cursor position
+        input.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // Calculate results
+        calculate();
       }
 
       function handleBlur() {
-        formatInputField(false); // Format when user clicks away
+        const value = amountInput.value;
+        const numericValue = parseEuropeanNumber(value);
+        
+        // Always ensure we have 2 decimal places on blur
+        const formatted = formatNumber(numericValue);
+        amountInput.value = formatted;
+        lastValue = formatted;
         calculate();
       }
 
       function handleKeyDown(e: KeyboardEvent) {
         if (e.key === 'Enter') {
-          formatInputField(false);
-          calculate();
+          handleBlur();
         }
+      }
+
+      function handleFocus() {
+        // Select all text when focusing on the field
+        amountInput.select();
       }
 
       // Event listeners
       amountInput?.addEventListener('input', handleInput);
-      amountInput?.addEventListener('blur', handleBlur); // Format on blur
-      amountInput?.addEventListener('keydown', handleKeyDown); // Format on Enter
+      amountInput?.addEventListener('blur', handleBlur);
+      amountInput?.addEventListener('focus', handleFocus);
+      amountInput?.addEventListener('keydown', handleKeyDown);
       vatRateInputs.forEach(input => input.addEventListener('change', calculate));
       calcModeInputs.forEach(input => input.addEventListener('change', calculate));
 
       // Initial setup
       amountInput.value = '0,00';
+      lastValue = '0,00';
       calculate();
     </script>
   </body>
